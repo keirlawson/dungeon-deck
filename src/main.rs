@@ -3,16 +3,23 @@ use anyhow::Result;
 use env_logger::Env;
 use log::debug;
 use log::info;
+use log::warn;
 use paho_mqtt as mqtt;
 use rodio::{Decoder, OutputStream, Sink};
 use serde::Deserialize;
 use std::convert::identity;
 use std::fs;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{fs::File, io::BufReader};
 use streamdeck::DeviceImage;
 use streamdeck::ImageOptions;
 use streamdeck::{pids, Error, StreamDeck};
+
+struct Button {
+    config: ButtonConfig,
+    playing: bool,
+}
 
 #[derive(Deserialize)]
 struct BrokerConfig {
@@ -22,15 +29,16 @@ struct BrokerConfig {
 }
 
 #[derive(Deserialize)]
-struct Button {
+struct ButtonConfig {
     image: String,
+    sound: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
 struct Row {
-    left: Option<Button>,
-    middle: Option<Button>,
-    right: Option<Button>,
+    left: Option<ButtonConfig>,
+    middle: Option<ButtonConfig>,
+    right: Option<ButtonConfig>,
 }
 
 #[derive(Deserialize)]
@@ -45,7 +53,7 @@ struct Config {
     buttons: Buttons,
 }
 
-fn populate_images(buttons: &mut Buttons, device: &StreamDeck) -> Result<Vec<Option<DeviceImage>>> {
+fn list_buttons(buttons: &mut Buttons) -> Vec<Option<ButtonConfig>> {
     let top = buttons
         .top
         .as_mut()
@@ -54,20 +62,8 @@ fn populate_images(buttons: &mut Buttons, device: &StreamDeck) -> Result<Vec<Opt
         .bottom
         .as_mut()
         .map(|row| vec![row.left.take(), row.middle.take(), row.right.take()]);
-    let paths = vec![top, bottom];
-    paths
-        .into_iter()
-        .filter_map(identity)
-        .flatten()
-        .map(|opt| {
-            opt.map(|path| {
-                device
-                    .load_image(&path.image, &ImageOptions::default())
-                    .map_err(|e| e.into())
-            })
-            .transpose()
-        })
-        .collect()
+    let list = vec![top, bottom];
+    list.into_iter().filter_map(identity).flatten().collect()
 }
 
 #[tokio::main]
@@ -87,16 +83,27 @@ async fn main() -> Result<()> {
 
         let client = mqtt::AsyncClient::new(broker_url.as_str()).unwrap();
 
-        client.connect(Some(con_opts)).await.unwrap();
+        // client.connect(Some(con_opts)).await.unwrap();
 
         info!("Connected to MQTT broker at {}", broker_url);
     }
 
     const ELGATO_VID: u16 = 0x0fd9;
     let mut deck = StreamDeck::connect(ELGATO_VID, pids::REVISED_MINI, None).unwrap();
-
     info!("Connected to Stream Deck");
-    let images = populate_images(&mut config.buttons, &deck)?;
+
+    let buttons = list_buttons(&mut config.buttons);
+    let images: Result<Vec<Option<DeviceImage>>> = buttons
+        .into_iter()
+        .map(|opt| {
+            opt.map(|path| {
+                deck.load_image(&path.image, &ImageOptions::default())
+                    .map_err(|e| e.into())
+            })
+            .transpose()
+        })
+        .collect();
+    let images = images?;
     images
         .into_iter()
         .enumerate()
@@ -109,11 +116,15 @@ async fn main() -> Result<()> {
         })
         .collect::<Result<()>>()?;
 
+    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    let sink = Sink::try_new(&stream_handle).unwrap();
+    info!("Acquired audio sink");
+
     const POLL_WAIT: Duration = Duration::new(1, 0);
     loop {
         let result = deck.read_buttons(Some(POLL_WAIT));
         match result {
-            Ok(pressed) => handle_press(&pressed),
+            Ok(pressed) => handle_press(&sink, &pressed),
             Err(err) => {
                 if !matches!(err, Error::NoData) {
                     bail!(err)
@@ -123,11 +134,21 @@ async fn main() -> Result<()> {
     }
 }
 
-fn handle_press(pressed: &Vec<u8>) {
-    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-    let file = BufReader::new(File::open("epicbattle.mp3").unwrap());
-    let source = Decoder::new(file).unwrap();
-    let sink = Sink::try_new(&stream_handle).unwrap();
-    sink.append(source);
-    sink.sleep_until_end();
+fn pressed_idx(states: &Vec<u8>) -> Option<usize> {
+    states
+        .iter()
+        .enumerate()
+        .find(|(_, state)| state == &&1)
+        .map(|(i, _)| i)
+}
+
+fn handle_press(sink: &Sink, pressed: &Vec<u8>) {
+    if let Some(idx) = pressed_idx(pressed) {
+        debug!("Button {} pressed", idx);
+        let file = BufReader::new(File::open("epicbattle.mp3").unwrap());
+        let source = Decoder::new(file).unwrap();
+        sink.append(source);
+    } else {
+        debug!("Buttons released");
+    }
 }
