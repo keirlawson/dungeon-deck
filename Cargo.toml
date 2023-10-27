@@ -1,0 +1,8 @@
+[package]
+name = "dungeon-deck"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+paho-mqtt = "0.12.3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
