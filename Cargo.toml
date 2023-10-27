@@ -7,6 +7,7 @@ edition = "2021"
 paho-mqtt = "0.12.3"
 rodio = { version = "0.17.3", features = ["symphonia-all"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+# At time of writing release does not support v2 of mini
 streamdeck = { git = "https://github.com/ryankurte/rust-streamdeck.git" }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8.5"
