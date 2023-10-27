@@ -3,10 +3,10 @@ use anyhow::Result;
 use env_logger::Env;
 use log::debug;
 use log::info;
-use log::warn;
 use paho_mqtt as mqtt;
 use rodio::{Decoder, OutputStream, Sink};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::convert::identity;
 use std::fs;
 use std::path::PathBuf;
@@ -28,9 +28,9 @@ struct BrokerConfig {
     pass: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct ButtonConfig {
-    image: String,
+    image: Option<String>,
     sound: Option<PathBuf>,
 }
 
@@ -70,8 +70,8 @@ fn list_buttons(buttons: &mut Buttons) -> Vec<Option<ButtonConfig>> {
 async fn main() -> Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
-    let config_contents = fs::read_to_string("./dungeon.toml").unwrap();
-    let mut config: Config = toml::from_str(&config_contents).unwrap();
+    let config_contents = fs::read_to_string("./dungeon.toml")?;
+    let mut config: Config = toml::from_str(&config_contents)?;
 
     if let Some(broker_config) = config.mqtt {
         let broker_url = format!("mqtt://{}", broker_config.host);
@@ -81,7 +81,7 @@ async fn main() -> Result<()> {
             .password(broker_config.pass)
             .finalize();
 
-        let client = mqtt::AsyncClient::new(broker_url.as_str()).unwrap();
+        let client = mqtt::AsyncClient::new(broker_url.as_str())?;
 
         // client.connect(Some(con_opts)).await.unwrap();
 
@@ -89,16 +89,19 @@ async fn main() -> Result<()> {
     }
 
     const ELGATO_VID: u16 = 0x0fd9;
-    let mut deck = StreamDeck::connect(ELGATO_VID, pids::REVISED_MINI, None).unwrap();
+    let mut deck = StreamDeck::connect(ELGATO_VID, pids::REVISED_MINI, None)?;
     info!("Connected to Stream Deck");
 
     let buttons = list_buttons(&mut config.buttons);
     let images: Result<Vec<Option<DeviceImage>>> = buttons
+        .clone()
         .into_iter()
         .map(|opt| {
-            opt.map(|path| {
-                deck.load_image(&path.image, &ImageOptions::default())
-                    .map_err(|e| e.into())
+            opt.and_then(|conf| {
+                conf.image.map(|path| {
+                    deck.load_image(&path, &ImageOptions::default())
+                        .map_err(|e| e.into())
+                })
             })
             .transpose()
         })
@@ -115,16 +118,27 @@ async fn main() -> Result<()> {
                 .map_err(|e| e.into())
         })
         .collect::<Result<()>>()?;
+    let mut button_state: HashMap<usize, Button> = buttons
+        .into_iter()
+        .map(|conf| Button {
+            config: conf.unwrap_or(ButtonConfig {
+                image: None,
+                sound: None,
+            }),
+            playing: false,
+        })
+        .enumerate()
+        .collect();
 
-    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-    let sink = Sink::try_new(&stream_handle).unwrap();
+    let (_stream, stream_handle) = OutputStream::try_default()?;
+    let sink = Sink::try_new(&stream_handle)?;
     info!("Acquired audio sink");
 
     const POLL_WAIT: Duration = Duration::new(1, 0);
     loop {
         let result = deck.read_buttons(Some(POLL_WAIT));
         match result {
-            Ok(pressed) => handle_press(&sink, &pressed),
+            Ok(pressed) => handle_press(&sink, &mut button_state, &pressed)?,
             Err(err) => {
                 if !matches!(err, Error::NoData) {
                     bail!(err)
@@ -142,13 +156,29 @@ fn pressed_idx(states: &Vec<u8>) -> Option<usize> {
         .map(|(i, _)| i)
 }
 
-fn handle_press(sink: &Sink, pressed: &Vec<u8>) {
+fn handle_press(
+    sink: &Sink,
+    buttons: &mut HashMap<usize, Button>,
+    pressed: &Vec<u8>,
+) -> Result<()> {
     if let Some(idx) = pressed_idx(pressed) {
         debug!("Button {} pressed", idx);
-        let file = BufReader::new(File::open("epicbattle.mp3").unwrap());
-        let source = Decoder::new(file).unwrap();
-        sink.append(source);
+        let button = buttons.get_mut(&idx).unwrap();
+        if button.playing {
+            sink.stop();
+            button.playing = false;
+        } else {
+            if let Some(path) = &button.config.sound {
+                let file = BufReader::new(File::open(path)?);
+                let source = Decoder::new(file)?;
+                sink.empty();
+                debug!("Playing audio file {:?}", path);
+                sink.append(source);
+                button.playing = true;
+            }
+        }
     } else {
         debug!("Buttons released");
     }
+    Ok(())
 }
