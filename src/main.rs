@@ -1,23 +1,40 @@
-use std::{fs::File, io::BufReader};
-
 use paho_mqtt as mqtt;
 use rodio::{Decoder, OutputStream, Sink};
+use serde::Deserialize;
+use std::fs;
+use std::{fs::File, io::BufReader};
+
+#[derive(Deserialize)]
+struct BrokerConfig {
+    host: String,
+    user: String,
+    pass: String,
+}
+
+#[derive(Deserialize)]
+struct Config {
+    mqtt: Option<BrokerConfig>,
+}
 
 #[tokio::main]
 async fn main() {
-    //FIXME take these at runtime/from config
-    let broker_url = format!("mqtt://{}", env!("MQTT_HOST"));
-    let broker_user = env!("MQTT_USER");
-    let broker_pass = env!("MQTT_PASS");
+    let config_contents = fs::read_to_string("./dungeon.toml").unwrap();
+    let config: Config = toml::from_str(&config_contents).unwrap();
 
-    let con_opts = mqtt::ConnectOptionsBuilder::new()
-        .user_name(broker_user)
-        .password(broker_pass)
-        .finalize();
+    if let Some(broker_config) = config.mqtt {
+        let broker_url = format!("mqtt://{}", broker_config.host);
 
-    let client = mqtt::AsyncClient::new(broker_url).unwrap();
+        let con_opts = mqtt::ConnectOptionsBuilder::new()
+            .user_name(broker_config.user)
+            .password(broker_config.pass)
+            .finalize();
 
-    client.connect(Some(con_opts)).await.unwrap();
+        let client = mqtt::AsyncClient::new(broker_url).unwrap();
+
+        client.connect(Some(con_opts)).await.unwrap();
+
+        println!("Broker connected");
+    }
 
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     let file = BufReader::new(File::open("epicbattle.mp3").unwrap());
