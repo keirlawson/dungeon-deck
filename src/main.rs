@@ -201,7 +201,7 @@ fn handle_press(
             if let Some(path) = &button.config.sound {
                 let file = BufReader::new(File::open(path)?);
                 let source = Decoder::new(file)?;
-                sink.empty();
+                sink.stop();
                 debug!("Playing audio file {:?}", path);
                 sink.append(source);
                 button.playing = true;
