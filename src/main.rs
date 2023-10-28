@@ -3,6 +3,7 @@ use anyhow::Result;
 use env_logger::Env;
 use log::debug;
 use log::info;
+use mqtt::Client;
 use paho_mqtt as mqtt;
 use rodio::{Decoder, OutputStream, Sink};
 use serde::Deserialize;
@@ -32,6 +33,8 @@ struct BrokerConfig {
 struct ButtonConfig {
     image: Option<String>,
     sound: Option<PathBuf>,
+    topic: Option<String>,
+    payload: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -66,27 +69,36 @@ fn list_buttons(buttons: &mut Buttons) -> Vec<Option<ButtonConfig>> {
     list.into_iter().filter_map(identity).flatten().collect()
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn connect_mqtt(config: BrokerConfig) -> Result<Client> {
+    let broker_url = format!("mqtt://{}", config.host);
+
+    let con_opts = mqtt::ConnectOptionsBuilder::new()
+        .user_name(config.user)
+        .password(config.pass)
+        .finalize();
+
+    let client = mqtt::Client::new(broker_url.as_str())?;
+
+    client.connect(Some(con_opts))?;
+
+    info!("Connected to MQTT broker at {}", broker_url);
+
+    Ok(client)
+}
+
+fn main() -> Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let config_contents = fs::read_to_string("./dungeon.toml")?;
     let mut config: Config = toml::from_str(&config_contents)?;
 
-    if let Some(broker_config) = config.mqtt {
-        let broker_url = format!("mqtt://{}", broker_config.host);
-
-        let con_opts = mqtt::ConnectOptionsBuilder::new()
-            .user_name(broker_config.user)
-            .password(broker_config.pass)
-            .finalize();
-
-        let client = mqtt::AsyncClient::new(broker_url.as_str())?;
-
-        // client.connect(Some(con_opts)).await.unwrap();
-
-        info!("Connected to MQTT broker at {}", broker_url);
-    }
+    //FIXME can we do this with a map now?
+    let broker_client = if let Some(client) = config.mqtt.map(|c| connect_mqtt(c)) {
+        let client = client?;
+        Some(client)
+    } else {
+        None
+    };
 
     const ELGATO_VID: u16 = 0x0fd9;
     let mut deck = StreamDeck::connect(ELGATO_VID, pids::REVISED_MINI, None)?;
@@ -121,9 +133,12 @@ async fn main() -> Result<()> {
     let mut button_state: HashMap<usize, Button> = buttons
         .into_iter()
         .map(|conf| Button {
+            //FIXME impl default
             config: conf.unwrap_or(ButtonConfig {
                 image: None,
                 sound: None,
+                topic: None,
+                payload: None,
             }),
             playing: false,
         })
@@ -138,7 +153,7 @@ async fn main() -> Result<()> {
     loop {
         let result = deck.read_buttons(Some(POLL_WAIT));
         match result {
-            Ok(pressed) => handle_press(&sink, &mut button_state, &pressed)?,
+            Ok(pressed) => handle_press(&sink, &mut button_state, &pressed, &broker_client)?,
             Err(err) => {
                 if !matches!(err, Error::NoData) {
                     bail!(err)
@@ -160,6 +175,7 @@ fn handle_press(
     sink: &Sink,
     buttons: &mut HashMap<usize, Button>,
     pressed: &Vec<u8>,
+    mqtt: &Option<Client>,
 ) -> Result<()> {
     if let Some(idx) = pressed_idx(pressed) {
         debug!("Button {} pressed", idx);
@@ -176,6 +192,17 @@ fn handle_press(
                 sink.append(source);
                 button.playing = true;
             }
+        }
+
+        if let (Some(mqtt), Some(topic), Some(payload)) =
+            (mqtt, &button.config.topic, &button.config.payload)
+        {
+            let message = mqtt::Message::new(topic, payload.as_str(), mqtt::QOS_1);
+            debug!(
+                "Sending message to topic {} with payload {}",
+                topic, payload
+            );
+            mqtt.publish(message)?;
         }
     } else {
         debug!("Buttons released");
