@@ -16,5 +16,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Install non-Rust dependencies
+      run: apt-get install alsa-lib
     - name: Build
       run: cargo build --verbose
