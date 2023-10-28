@@ -11,6 +11,9 @@ use std::collections::HashMap;
 use std::convert::identity;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{fs::File, io::BufReader};
 use streamdeck::DeviceImage;
@@ -88,6 +91,9 @@ fn connect_mqtt(config: BrokerConfig) -> Result<Client> {
 
 fn main() -> Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    let kill = Arc::new(AtomicBool::new(false));
+    let k2 = kill.clone();
+    ctrlc::set_handler(move || k2.store(true, Ordering::Relaxed)).unwrap();
 
     let config_contents = fs::read_to_string("./dungeon.toml")?;
     let mut config: Config = toml::from_str(&config_contents)?;
@@ -149,7 +155,7 @@ fn main() -> Result<()> {
     let sink = Sink::try_new(&stream_handle)?;
     info!("Acquired audio sink");
 
-    const POLL_WAIT: Duration = Duration::new(1, 0);
+    const POLL_WAIT: Duration = Duration::from_millis(250);
     loop {
         let result = deck.read_buttons(Some(POLL_WAIT));
         match result {
@@ -159,6 +165,14 @@ fn main() -> Result<()> {
                     bail!(err)
                 }
             }
+        }
+        if kill.load(Ordering::Relaxed) == true {
+            if let Some(cli) = broker_client {
+                cli.disconnect(None).unwrap();
+            }
+            sink.stop();
+            debug!("Exiting gracefully");
+            break Ok(());
         }
     }
 }
@@ -197,7 +211,7 @@ fn handle_press(
         if let (Some(mqtt), Some(topic), Some(payload)) =
             (mqtt, &button.config.topic, &button.config.payload)
         {
-            let message = mqtt::Message::new(topic, payload.as_str(), mqtt::QOS_1);
+            let message = mqtt::Message::new(topic, payload.as_str(), mqtt::QOS_0);
             debug!(
                 "Sending message to topic {} with payload {}",
                 topic, payload
