@@ -418,6 +418,7 @@ dependencies = [
  "anyhow",
  "ctrlc",
  "env_logger",
+ "image",
  "log",
  "paho-mqtt",
  "rodio",
