@@ -24,3 +24,13 @@ image = "./lightbulb.png"
 topic = "some/topic"
 payload = "pressed"
 ```
+
+## Development
+
+### cross-building for ARM
+
+We can cross-build for ARM using [cross](https://github.com/cross-rs/cross):
+
+```sh
+cross build --target aarch64-unknown-linux-gnu
+```
