@@ -2,6 +2,7 @@
 name = "dungeon-deck"
 version = "0.1.0"
 edition = "2021"
+authors = ["Keir Lawson"]
 
 [dependencies]
 paho-mqtt = "0.12.3"
