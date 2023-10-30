@@ -6,7 +6,7 @@ authors = ["Keir Lawson"]
 license = "MIT"
 
 [dependencies]
-paho-mqtt = "0.12.3"
+paho-mqtt = { version = "0.12.3", features = ["vendored-ssl"]}
 rodio = { version = "0.17.3", features = ["symphonia-all"] }
 # At time of writing released 0.7.0 does not support v2 of mini
 streamdeck = { git = "https://github.com/ryankurte/rust-streamdeck.git" }

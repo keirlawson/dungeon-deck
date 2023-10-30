@@ -13,6 +13,7 @@ use rodio::{Decoder, OutputStream, Sink};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::convert::identity;
+use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -23,6 +24,7 @@ use std::{fs::File, io::BufReader};
 use streamdeck::{pids, Error, StreamDeck};
 const PLAY_IMG: &[u8] = include_bytes!("../img/play.png");
 const STOP_IMG: &[u8] = include_bytes!("../img/stop.png");
+const DEFAULT_CONFIG_LOCATION: &str = "./dungeon.toml";
 
 struct Button {
     config: ButtonConfig,
@@ -159,7 +161,13 @@ fn main() -> Result<()> {
     let k2 = kill.clone();
     ctrlc::set_handler(move || k2.store(true, Ordering::Relaxed)).unwrap();
 
-    let config_contents = fs::read_to_string("./dungeon.toml")?;
+    let args: Vec<String> = env::args().collect();
+    let config_contents = if let Some(location) = args.get(1) {
+        fs::read_to_string(location)?
+    } else {
+        fs::read_to_string(DEFAULT_CONFIG_LOCATION)?
+    };
+
     let mut config: Config = toml::from_str(&config_contents)?;
 
     //FIXME can we do this with a map now?
