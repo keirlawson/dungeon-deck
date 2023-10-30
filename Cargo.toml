@@ -3,11 +3,12 @@ name = "dungeon-deck"
 version = "0.1.0"
 edition = "2021"
 authors = ["Keir Lawson"]
+license = "MIT"
 
 [dependencies]
 paho-mqtt = "0.12.3"
 rodio = { version = "0.17.3", features = ["symphonia-all"] }
-# At time of writing release does not support v2 of mini
+# At time of writing released 0.7.0 does not support v2 of mini
 streamdeck = { git = "https://github.com/ryankurte/rust-streamdeck.git" }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8.5"
