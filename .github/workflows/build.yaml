@@ -33,4 +33,7 @@ jobs:
     - name: Install cross
       run: cargo install cross --git https://github.com/cross-rs/cross
     - name: Build
-      run: cross deb --target aarch64-unknown-linux-gnu --release
+      run: |
+        cross build --target aarch64-unknown-linux-gnu --release --verbose
+        cargo deb --no-build --no-strip --target aarch64-unknown-linux-gnu 
+      
