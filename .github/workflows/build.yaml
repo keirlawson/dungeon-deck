@@ -22,6 +22,11 @@ jobs:
       run: sudo apt-get install -y libasound2-dev libusb-1.0-0-dev
     - name: Build
       run: cargo deb --verbose
+    - uses: actions/upload-artifact@v3
+      with:
+        name: X86-64 debug deb
+        path: target/debian/*.deb
+      
 
   build-arm:
     runs-on: ubuntu-latest
@@ -34,6 +39,10 @@ jobs:
       run: cargo install cross --git https://github.com/cross-rs/cross
     - name: Build
       run: |
-        cross build --target aarch64-unknown-linux-gnu --release --verbose
+        cross build --target aarch64-unknown-linux-gnu --verbose
         cargo deb --no-build --no-strip --target aarch64-unknown-linux-gnu 
+    - uses: actions/upload-artifact@v3
+      with:
+        name: ARM64 debug deb
+        path: target/aarch64-unknown-linux-gnu/debian/*.deb
       
