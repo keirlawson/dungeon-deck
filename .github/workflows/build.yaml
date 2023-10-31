@@ -21,7 +21,7 @@ jobs:
     - name: Install non-Rust dependencies
       run: sudo apt-get install -y libasound2-dev libusb-1.0-0-dev
     - name: Build
-      run: cargo deb --verbose
+      run: cargo deb --verbose --profile debug
     - uses: actions/upload-artifact@v3
       with:
         name: X86-64 debug deb
@@ -40,7 +40,7 @@ jobs:
     - name: Build
       run: |
         cross build --target aarch64-unknown-linux-gnu --verbose
-        cargo deb --no-build --no-strip --target aarch64-unknown-linux-gnu 
+        cargo deb --no-build --no-strip --target aarch64-unknown-linux-gnu --profile debug 
     - uses: actions/upload-artifact@v3
       with:
         name: ARM64 debug deb
