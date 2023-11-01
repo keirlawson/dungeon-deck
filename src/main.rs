@@ -79,6 +79,8 @@ struct Buttons {
 struct Config {
     mqtt: Option<BrokerConfig>,
     buttons: Buttons,
+    #[serde(default)]
+    playicon: bool,
 }
 
 fn list_buttons(buttons: &mut Buttons) -> Vec<Option<ButtonConfig>> {
@@ -115,6 +117,7 @@ fn write_images(
     state: &HashMap<usize, Button>,
     deck: &mut StreamDeck,
     play_img: &DynamicImage,
+    show_play_icon: bool,
 ) -> Result<()> {
     //FIXME still render initial play button when image not set
     state
@@ -126,7 +129,7 @@ fn write_images(
         })
         .map(|(i, img, is_audio)| {
             let mut img = img.clone();
-            if is_audio {
+            if is_audio && show_play_icon {
                 imageops::overlay(&mut img, play_img, 0, 0);
             }
             write_image(i, deck, img)
@@ -187,7 +190,7 @@ fn main() -> Result<()> {
     let stop_img = image::load_from_memory(STOP_IMG)?;
     let buttons = list_buttons(&mut config.buttons);
     let mut button_state = build_state(buttons, width, height)?;
-    write_images(&button_state, &mut deck, &play_img)?;
+    write_images(&button_state, &mut deck, &play_img, config.playicon)?;
 
     let (_stream, stream_handle) = OutputStream::try_default()?;
     let sink = Sink::try_new(&stream_handle)?;
@@ -205,6 +208,7 @@ fn main() -> Result<()> {
                 &play_img,
                 &stop_img,
                 &mut deck,
+                config.playicon,
             )?,
             Err(err) => {
                 if !matches!(err, Error::NoData) {
@@ -273,6 +277,7 @@ fn handle_press(
     play_img: &DynamicImage,
     stop_img: &DynamicImage,
     deck: &mut StreamDeck,
+    show_play_icon: bool,
 ) -> Result<()> {
     if let Some(idx) = pressed_idx(pressed) {
         debug!("Button {} pressed", idx);
@@ -281,7 +286,11 @@ fn handle_press(
             sink.stop();
             button.playing = false;
             if let Some(img) = &button.image {
-                write_overlayed(idx, &img, play_img, deck)?;
+                if show_play_icon {
+                    write_overlayed(idx, &img, play_img, deck)?;
+                } else {
+                    write_image(&idx, deck, img.clone())?;
+                }
             } else {
                 write_image(&idx, deck, play_img.clone())?;
             }
