@@ -8,7 +8,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  release:
+  build-release:
 
     runs-on: ubuntu-latest
 
@@ -20,12 +20,8 @@ jobs:
       run: sudo apt-get install -y libasound2-dev libusb-1.0-0-dev
     - name: Package
       run: cargo deb --verbose
-    - name: Release
-      uses: softprops/action-gh-release@v1    
-      with:
-          files: target/debian/*.deb
 
-  release-arm:
+  build-release-arm:
     runs-on: ubuntu-latest
 
     steps:
@@ -38,8 +34,18 @@ jobs:
       run: |
         cross build --release --target aarch64-unknown-linux-gnu --verbose
         cargo deb --no-build --no-strip --target aarch64-unknown-linux-gnu --verbose
+          
+  release:
+    runs-on: ubuntu-latest
+
+    needs: [build-release, build-release-arm]
+
+    steps:
     - name: Release
       uses: softprops/action-gh-release@v1    
       with:
-          files: target/aarch64-unknown-linux-gnu/debian/*.deb
-          
+          files: |
+            target/aarch64-unknown-linux-gnu/debian/*.deb
+            target/debian/*.deb
+
+      
