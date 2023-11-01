@@ -25,7 +25,7 @@ jobs:
         echo "DEB_NAME=$(basename $(ls target/debian/*.deb))" >> "$GITHUB_ENV"
     - uses: actions/upload-artifact@v3
       with:
-        name: "{{ env.DEB_NAME }}"
+        name: ${{ env.DEB_NAME }}
         path: target/debian/*.deb
 
   build-release-arm:
