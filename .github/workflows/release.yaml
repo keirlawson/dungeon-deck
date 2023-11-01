@@ -41,9 +41,10 @@ jobs:
       run: |
         cross build --release --target aarch64-unknown-linux-gnu --verbose
         cargo deb --no-build --no-strip --target aarch64-unknown-linux-gnu --verbose
+        echo "DEB_NAME=$(basename $(ls target/aarch64-unknown-linux-gnu/debian/*.deb))" >> "$GITHUB_ENV"
     - uses: actions/upload-artifact@v3
       with:
-        name: ARM64 deb
+        name: ${{ env.DEB_NAME }}
         path: target/aarch64-unknown-linux-gnu/debian/*.deb
           
   release:
@@ -54,6 +55,10 @@ jobs:
     steps:
     - name: Download debs
       uses: actions/download-artifact@v3
+    - run: |
+        ls
+        pwd
+        tree
     - name: Release
       uses: softprops/action-gh-release@v1    
       with:
