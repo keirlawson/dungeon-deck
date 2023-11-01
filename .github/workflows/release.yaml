@@ -20,10 +20,12 @@ jobs:
     - name: Install non-Rust dependencies
       run: sudo apt-get install -y libasound2-dev libusb-1.0-0-dev
     - name: Package
-      run: cargo deb --verbose
+      run: |
+        cargo deb --verbose
+        echo "DEB_NAME=$(basename $(ls target/debian/*.deb))" >> "$GITHUB_ENV"
     - uses: actions/upload-artifact@v3
       with:
-        name: X86-64 deb
+        name: "{{ env.DEB_NAME }}"
         path: target/debian/*.deb
 
   build-release-arm:
