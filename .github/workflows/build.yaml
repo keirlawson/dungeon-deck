@@ -21,11 +21,11 @@ jobs:
     - name: Install non-Rust dependencies
       run: sudo apt-get install -y libasound2-dev libusb-1.0-0-dev
     - name: Build
-      run: cargo deb --verbose --profile debug
+      run: cargo build --verbose
     - uses: actions/upload-artifact@v3
       with:
-        name: X86-64 debug deb
-        path: target/debian/*.deb
+        name: X86-64 debug
+        path: target/x86_64-unknown-linux-gnu/debug/dungeon-deck
       
 
   build-arm:
@@ -40,9 +40,8 @@ jobs:
     - name: Build
       run: |
         cross build --target aarch64-unknown-linux-gnu --verbose
-        cargo deb --no-build --no-strip --target aarch64-unknown-linux-gnu --profile debug 
     - uses: actions/upload-artifact@v3
       with:
-        name: ARM64 debug deb
-        path: target/aarch64-unknown-linux-gnu/debian/*.deb
+        name: ARM64 debug
+        path: target/aarch64-unknown-linux-gnu/debug/dungeon-deck
       
