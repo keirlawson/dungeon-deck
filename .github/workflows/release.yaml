@@ -26,7 +26,7 @@ jobs:
     - uses: actions/upload-artifact@v3
       with:
         name: ${{ env.DEB_NAME }}
-        path: target/debian/*.deb
+        path: target/debian/${{ env.DEB_NAME }}
 
   build-release-arm:
     runs-on: ubuntu-latest
@@ -45,7 +45,7 @@ jobs:
     - uses: actions/upload-artifact@v3
       with:
         name: ${{ env.DEB_NAME }}
-        path: target/aarch64-unknown-linux-gnu/debian/*.deb
+        path: target/aarch64-unknown-linux-gnu/debian/${{ env.DEB_NAME }}
           
   release:
     runs-on: ubuntu-latest
