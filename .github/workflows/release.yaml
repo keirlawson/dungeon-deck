@@ -55,13 +55,8 @@ jobs:
     steps:
     - name: Download debs
       uses: actions/download-artifact@v3
-    - run: |
-        ls
-        pwd
-        tree
     - name: Release
       uses: softprops/action-gh-release@v1    
       with:
           files: ./**/*.deb
-
-      
+    

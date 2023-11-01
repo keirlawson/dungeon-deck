@@ -63,3 +63,7 @@ We can cross-build for ARM using [cross](https://github.com/cross-rs/cross):
 ```sh
 cross build --target aarch64-unknown-linux-gnu
 ```
+
+### Releasing
+
+Releases are automatically built and published for any tag with the form `v*.*.*`
