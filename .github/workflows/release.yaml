@@ -21,6 +21,10 @@ jobs:
       run: sudo apt-get install -y libasound2-dev libusb-1.0-0-dev
     - name: Package
       run: cargo deb --verbose
+    - uses: actions/upload-artifact@v3
+      with:
+        name: X86-64 deb
+        path: target/debian/*.deb
 
   build-release-arm:
     runs-on: ubuntu-latest
@@ -35,6 +39,10 @@ jobs:
       run: |
         cross build --release --target aarch64-unknown-linux-gnu --verbose
         cargo deb --no-build --no-strip --target aarch64-unknown-linux-gnu --verbose
+    - uses: actions/upload-artifact@v3
+      with:
+        name: ARM64 deb
+        path: target/aarch64-unknown-linux-gnu/debian/*.deb
           
   release:
     runs-on: ubuntu-latest
@@ -42,11 +50,11 @@ jobs:
     needs: [build-release, build-release-arm]
 
     steps:
+    - name: Download debs
+      uses: actions/download-artifact@v3
     - name: Release
       uses: softprops/action-gh-release@v1    
       with:
-          files: |
-            target/aarch64-unknown-linux-gnu/debian/*.deb
-            target/debian/*.deb
+          files: *.deb
 
       
