@@ -6,6 +6,7 @@ use image::imageops::FilterType;
 use image::io::Reader;
 use image::DynamicImage;
 use log::debug;
+use log::error;
 use log::info;
 use mqtt::Client;
 use paho_mqtt as mqtt;
@@ -102,6 +103,7 @@ fn connect_mqtt(config: BrokerConfig) -> Result<Client> {
     let con_opts = mqtt::ConnectOptionsBuilder::new()
         .user_name(config.user)
         .password(config.pass)
+        .automatic_reconnect(Duration::from_secs(1), Duration::from_secs(15))
         .finalize();
 
     let client = mqtt::Client::new(broker_url.as_str())?;
@@ -318,7 +320,12 @@ fn handle_press(
                 "Sending message to topic {} with payload {}",
                 topic, payload
             );
-            mqtt.publish(message)?;
+            if let Err(err) = mqtt.publish(message) {
+                error!(
+                    "Unable to send message with payload of {} to topic {}: {}",
+                    payload, topic, err
+                );
+            };
         }
     } else {
         debug!("Buttons released");
