@@ -4,7 +4,7 @@ Requires=btconnect.service
 After=btconnect.service
 
 [Service]
-ExecStart=/usr/local/bin/dungeon-deck /path/to/dungeon.toml > /path/to/dungeon-deck.log
+ExecStart=/usr/local/bin/dungeon-deck /path/to/dungeon.toml
 
 [Install]
 WantedBy=default.target
