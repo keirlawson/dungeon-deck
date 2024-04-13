@@ -32,7 +32,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install cross
-      run: cargo install cross --git https://github.com/cross-rs/cross
+      run: cargo install cross --git https://github.com/cross-rs/cross --tag v0.2.5
     - name: Build
       run: |
         cross build --target aarch64-unknown-linux-gnu --verbose
