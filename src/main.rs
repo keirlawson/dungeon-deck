@@ -64,15 +64,37 @@ struct ButtonConfig {
 
 #[derive(Deserialize)]
 struct Row {
-    left: Option<ButtonConfig>,
-    middle: Option<ButtonConfig>,
-    right: Option<ButtonConfig>,
+    one: Option<ButtonConfig>,
+    two: Option<ButtonConfig>,
+    three: Option<ButtonConfig>,
+    four: Option<ButtonConfig>,
+    five: Option<ButtonConfig>,
+    six: Option<ButtonConfig>,
+    seven: Option<ButtonConfig>,
+    eight: Option<ButtonConfig>,
+}
+
+impl Row {
+    fn list(self) -> Vec<Option<ButtonConfig>> {
+        vec![
+            self.one, self.two, self.three, self.four, self.five, self.six, self.seven, self.eight,
+        ]
+    }
 }
 
 #[derive(Deserialize)]
 struct Buttons {
-    top: Option<Row>,
-    bottom: Option<Row>,
+    first: Option<Row>,
+    second: Option<Row>,
+    third: Option<Row>,
+    fourth: Option<Row>,
+}
+
+impl Buttons {
+    fn list(self) -> Vec<Option<ButtonConfig>> {
+        let it = [self.first, self.second, self.third, self.fourth].into_iter();
+        it.flatten().flat_map(|r| r.list()).collect()
+    }
 }
 
 #[derive(Deserialize)]
@@ -81,19 +103,6 @@ struct Config {
     buttons: Buttons,
     #[serde(default)]
     playicon: bool,
-}
-
-fn list_buttons(buttons: &mut Buttons) -> Vec<Option<ButtonConfig>> {
-    let top = buttons
-        .top
-        .as_mut()
-        .map(|row| vec![row.left.take(), row.middle.take(), row.right.take()]);
-    let bottom = buttons
-        .bottom
-        .as_mut()
-        .map(|row| vec![row.left.take(), row.middle.take(), row.right.take()]);
-    let list = vec![top, bottom];
-    list.into_iter().flatten().flatten().collect()
 }
 
 fn connect_mqtt(config: BrokerConfig) -> Result<Client> {
@@ -171,7 +180,7 @@ fn main() -> Result<()> {
         fs::read_to_string(DEFAULT_CONFIG_LOCATION)?
     };
 
-    let mut config: Config = toml::from_str(&config_contents)?;
+    let config: Config = toml::from_str(&config_contents)?;
 
     //FIXME can we do this with a map now?
     let broker_client = if let Some(client) = config.mqtt.map(connect_mqtt) {
@@ -188,7 +197,7 @@ fn main() -> Result<()> {
     let (width, height) = deck.kind().image_size();
     let play_img = image::load_from_memory(PLAY_IMG)?;
     let stop_img = image::load_from_memory(STOP_IMG)?;
-    let buttons = list_buttons(&mut config.buttons);
+    let buttons = config.buttons.list();
     let mut button_state = build_state(buttons, width, height)?;
     write_images(&button_state, &mut deck, &play_img, config.playicon)?;
 
