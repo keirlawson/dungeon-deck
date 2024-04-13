@@ -1,4 +1,5 @@
 use anyhow::bail;
+use anyhow::Context;
 use anyhow::Result;
 use env_logger::Env;
 use image::imageops;
@@ -57,7 +58,7 @@ struct BrokerConfig {
 
 #[derive(Deserialize, Clone)]
 struct ButtonConfig {
-    image: Option<String>,
+    image: Option<PathBuf>,
     sound: Option<PathBuf>,
     topic: Option<String>,
     payload: Option<String>,
@@ -279,7 +280,9 @@ fn build_state(
                     .image
                     .as_ref()
                     .map(|path| {
-                        let image = Reader::open(path)?.decode()?;
+                        let image = Reader::open(path)
+                            .with_context(|| format!("Unable to open path {}", path.display()))?
+                            .decode()?;
                         let image = image.resize(width as u32, height as u32, FilterType::Gaussian);
                         anyhow::Ok(image)
                     })

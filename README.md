@@ -47,11 +47,11 @@ pass = "somepassword"
 
 [buttons]
 
-[buttons.first.one]
+[buttons.top.left]
 image = "./swords.png"
 sound = "./epicbattle.mp3"
 
-[buttons.second.three]
+[buttons.bottom.right]
 image = "./lightbulb.png"
 topic = "some/topic"
 payload = "pressed"
