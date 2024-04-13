@@ -1,4 +1,5 @@
 use anyhow::bail;
+use anyhow::Context;
 use anyhow::Result;
 use env_logger::Env;
 use image::imageops;
@@ -15,6 +16,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::iter;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -56,7 +58,7 @@ struct BrokerConfig {
 
 #[derive(Deserialize, Clone)]
 struct ButtonConfig {
-    image: Option<String>,
+    image: Option<PathBuf>,
     sound: Option<PathBuf>,
     topic: Option<String>,
     payload: Option<String>,
@@ -64,36 +66,82 @@ struct ButtonConfig {
 
 #[derive(Deserialize)]
 struct Row {
-    left: Option<ButtonConfig>,
-    middle: Option<ButtonConfig>,
-    right: Option<ButtonConfig>,
+    one: Option<ButtonConfig>,
+    two: Option<ButtonConfig>,
+    three: Option<ButtonConfig>,
+    four: Option<ButtonConfig>,
+    five: Option<ButtonConfig>,
+    six: Option<ButtonConfig>,
+    seven: Option<ButtonConfig>,
+    eight: Option<ButtonConfig>,
+}
+
+impl Row {
+    fn list(self, limit: usize) -> Vec<Option<ButtonConfig>> {
+        [
+            self.one, self.two, self.three, self.four, self.five, self.six, self.seven, self.eight,
+        ]
+        .into_iter()
+        .take(limit)
+        .collect()
+    }
 }
 
 #[derive(Deserialize)]
 struct Buttons {
-    top: Option<Row>,
-    bottom: Option<Row>,
+    first: Option<Row>,
+    second: Option<Row>,
+    third: Option<Row>,
+    fourth: Option<Row>,
+}
+
+impl Buttons {
+    fn list(self, device: Device) -> Vec<Option<ButtonConfig>> {
+        let it = [self.first, self.second, self.third, self.fourth].into_iter();
+        let it = it.take(device.rows());
+        it.flat_map(|row| match row {
+            Some(r) => r.list(device.columns()),
+            None => iter::repeat(None).take(device.columns()).collect(),
+        })
+        .collect()
+    }
+}
+
+#[derive(Deserialize)]
+enum Device {
+    Original,
+    OriginalV2,
+    Mk2,
+    Mini,
+    RevisedMini,
+    XL,
+}
+
+impl Device {
+    fn rows(&self) -> usize {
+        match self {
+            Device::Mk2 | Device::Original | Device::OriginalV2 => 3,
+            Device::RevisedMini | Device::Mini => 2,
+            Device::XL => 4,
+        }
+    }
+
+    fn columns(&self) -> usize {
+        match self {
+            Device::Mk2 | Device::Original | Device::OriginalV2 => 5,
+            Device::RevisedMini | Device::Mini => 3,
+            Device::XL => 8,
+        }
+    }
 }
 
 #[derive(Deserialize)]
 struct Config {
+    device: Device,
     mqtt: Option<BrokerConfig>,
     buttons: Buttons,
     #[serde(default)]
     playicon: bool,
-}
-
-fn list_buttons(buttons: &mut Buttons) -> Vec<Option<ButtonConfig>> {
-    let top = buttons
-        .top
-        .as_mut()
-        .map(|row| vec![row.left.take(), row.middle.take(), row.right.take()]);
-    let bottom = buttons
-        .bottom
-        .as_mut()
-        .map(|row| vec![row.left.take(), row.middle.take(), row.right.take()]);
-    let list = vec![top, bottom];
-    list.into_iter().flatten().flatten().collect()
 }
 
 fn connect_mqtt(config: BrokerConfig) -> Result<Client> {
@@ -171,24 +219,26 @@ fn main() -> Result<()> {
         fs::read_to_string(DEFAULT_CONFIG_LOCATION)?
     };
 
-    let mut config: Config = toml::from_str(&config_contents)?;
+    let config: Config = toml::from_str(&config_contents)?;
 
-    //FIXME can we do this with a map now?
-    let broker_client = if let Some(client) = config.mqtt.map(connect_mqtt) {
-        let client = client?;
-        Some(client)
-    } else {
-        None
-    };
+    let broker_client = config.mqtt.map(connect_mqtt).transpose()?;
 
     const ELGATO_VID: u16 = 0x0fd9;
-    let mut deck = StreamDeck::connect(ELGATO_VID, pids::REVISED_MINI, None)?;
+    let pid = match config.device {
+        Device::Mk2 => pids::MK2,
+        Device::RevisedMini => pids::REVISED_MINI,
+        Device::Original => pids::ORIGINAL,
+        Device::OriginalV2 => pids::ORIGINAL_V2,
+        Device::Mini => pids::MINI,
+        Device::XL => pids::XL,
+    };
+    let mut deck = StreamDeck::connect(ELGATO_VID, pid, None)?;
     info!("Connected to Stream Deck");
 
     let (width, height) = deck.kind().image_size();
     let play_img = image::load_from_memory(PLAY_IMG)?;
     let stop_img = image::load_from_memory(STOP_IMG)?;
-    let buttons = list_buttons(&mut config.buttons);
+    let buttons = config.buttons.list(config.device);
     let mut button_state = build_state(buttons, width, height)?;
     write_images(&button_state, &mut deck, &play_img, config.playicon)?;
 
@@ -240,7 +290,9 @@ fn build_state(
                     .image
                     .as_ref()
                     .map(|path| {
-                        let image = Reader::open(path)?.decode()?;
+                        let image = Reader::open(path)
+                            .with_context(|| format!("Unable to open path {}", path.display()))?
+                            .decode()?;
                         let image = image.resize(width as u32, height as u32, FilterType::Gaussian);
                         anyhow::Ok(image)
                     })
