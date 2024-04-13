@@ -13,7 +13,6 @@ use paho_mqtt as mqtt;
 use rodio::{Decoder, OutputStream, Sink};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::convert::identity;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -94,7 +93,7 @@ fn list_buttons(buttons: &mut Buttons) -> Vec<Option<ButtonConfig>> {
         .as_mut()
         .map(|row| vec![row.left.take(), row.middle.take(), row.right.take()]);
     let list = vec![top, bottom];
-    list.into_iter().filter_map(identity).flatten().collect()
+    list.into_iter().flatten().flatten().collect()
 }
 
 fn connect_mqtt(config: BrokerConfig) -> Result<Client> {
@@ -129,14 +128,13 @@ fn write_images(
                 .as_ref()
                 .map(|img| (i, img, but.config.sound.is_some()))
         })
-        .map(|(i, img, is_audio)| {
+        .try_for_each(|(i, img, is_audio)| {
             let mut img = img.clone();
             if is_audio && show_play_icon {
                 imageops::overlay(&mut img, play_img, 0, 0);
             }
             write_image(i, deck, img)
         })
-        .collect::<Result<()>>()
 }
 
 fn write_image(
@@ -176,7 +174,7 @@ fn main() -> Result<()> {
     let mut config: Config = toml::from_str(&config_contents)?;
 
     //FIXME can we do this with a map now?
-    let broker_client = if let Some(client) = config.mqtt.map(|c| connect_mqtt(c)) {
+    let broker_client = if let Some(client) = config.mqtt.map(connect_mqtt) {
         let client = client?;
         Some(client)
     } else {
@@ -218,7 +216,7 @@ fn main() -> Result<()> {
                 }
             }
         }
-        if kill.load(Ordering::Relaxed) == true {
+        if kill.load(Ordering::Relaxed) {
             if let Some(cli) = broker_client {
                 cli.disconnect(None).unwrap();
             }
@@ -242,7 +240,7 @@ fn build_state(
                     .image
                     .as_ref()
                     .map(|path| {
-                        let image = Reader::open(&path)?.decode()?;
+                        let image = Reader::open(path)?.decode()?;
                         let image = image.resize(width as u32, height as u32, FilterType::Gaussian);
                         anyhow::Ok(image)
                     })
@@ -263,7 +261,7 @@ fn build_state(
         .collect::<Result<HashMap<usize, Button>>>()
 }
 
-fn pressed_idx(states: &Vec<u8>) -> Option<usize> {
+fn pressed_idx(states: &[u8]) -> Option<usize> {
     states
         .iter()
         .enumerate()
@@ -271,10 +269,11 @@ fn pressed_idx(states: &Vec<u8>) -> Option<usize> {
         .map(|(i, _)| i)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_press(
     sink: &Sink,
     buttons: &mut HashMap<usize, Button>,
-    pressed: &Vec<u8>,
+    pressed: &[u8],
     mqtt: &Option<Client>,
     play_img: &DynamicImage,
     stop_img: &DynamicImage,
@@ -289,26 +288,24 @@ fn handle_press(
             button.playing = false;
             if let Some(img) = &button.image {
                 if show_play_icon {
-                    write_overlayed(idx, &img, play_img, deck)?;
+                    write_overlayed(idx, img, play_img, deck)?;
                 } else {
                     write_image(&idx, deck, img.clone())?;
                 }
             } else {
                 write_image(&idx, deck, play_img.clone())?;
             }
-        } else {
-            if let Some(path) = &button.config.sound {
-                let file = BufReader::new(File::open(path)?);
-                let source = Decoder::new(file)?;
-                sink.stop();
-                debug!("Playing audio file {:?}", path);
-                sink.append(source);
-                button.playing = true;
-                if let Some(img) = &button.image {
-                    write_overlayed(idx, &img, stop_img, deck)?;
-                } else {
-                    write_image(&idx, deck, stop_img.clone())?;
-                }
+        } else if let Some(path) = &button.config.sound {
+            let file = BufReader::new(File::open(path)?);
+            let source = Decoder::new(file)?;
+            sink.stop();
+            debug!("Playing audio file {:?}", path);
+            sink.append(source);
+            button.playing = true;
+            if let Some(img) = &button.image {
+                write_overlayed(idx, img, stop_img, deck)?;
+            } else {
+                write_image(&idx, deck, stop_img.clone())?;
             }
         }
 
