@@ -36,7 +36,7 @@ jobs:
     - name: Install cargo-deb
       run: cargo install cargo-deb
     - name: Install cross
-      run: cargo install cross --git https://github.com/cross-rs/cross
+      run: cargo install cross --git https://github.com/cross-rs/cross --tag v0.2.5
     - name: Package
       run: |
         cross build --release --target aarch64-unknown-linux-gnu --verbose
