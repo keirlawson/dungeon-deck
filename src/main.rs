@@ -109,22 +109,28 @@ impl Buttons {
 
 #[derive(Deserialize)]
 enum Device {
+    Original,
+    OriginalV2,
     Mk2,
+    Mini,
     RevisedMini,
+    XL,
 }
 
 impl Device {
     fn rows(&self) -> usize {
         match self {
-            Device::Mk2 => 3,
-            Device::RevisedMini => 2,
+            Device::Mk2 | Device::Original | Device::OriginalV2 => 3,
+            Device::RevisedMini | Device::Mini => 2,
+            Device::XL => 4,
         }
     }
 
     fn columns(&self) -> usize {
         match self {
-            Device::Mk2 => 5,
-            Device::RevisedMini => 3,
+            Device::Mk2 | Device::Original | Device::OriginalV2 => 5,
+            Device::RevisedMini | Device::Mini => 3,
+            Device::XL => 8,
         }
     }
 }
@@ -221,6 +227,10 @@ fn main() -> Result<()> {
     let pid = match config.device {
         Device::Mk2 => pids::MK2,
         Device::RevisedMini => pids::REVISED_MINI,
+        Device::Original => pids::ORIGINAL,
+        Device::OriginalV2 => pids::ORIGINAL_V2,
+        Device::Mini => pids::MINI,
+        Device::XL => pids::XL,
     };
     let mut deck = StreamDeck::connect(ELGATO_VID, pid, None)?;
     info!("Connected to Stream Deck");

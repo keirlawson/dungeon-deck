@@ -1,6 +1,6 @@
 # Dungeon Deck
 
-Turn your Stream Deck Mk2 or Mini into a headless sound/automation board. It
+Turn your Stream Deck (or Mini/XL) into a headless sound/automation board. It
 supports displaying images on the respective buttons, playing sounds as well as
 interacting with home automations via MQTT.
 
@@ -56,6 +56,15 @@ image = "./lightbulb.png"
 topic = "some/topic"
 payload = "pressed"
 ```
+
+Possible `device` values are:
+
+- `Original`
+- `OriginalV2`
+- `Mk2`
+- `Mini`
+- `RevisedMini`
+- `XL`
 
 ## Development
 
