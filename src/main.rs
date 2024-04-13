@@ -214,13 +214,7 @@ fn main() -> Result<()> {
 
     let config: Config = toml::from_str(&config_contents)?;
 
-    //FIXME can we do this with a map now?
-    let broker_client = if let Some(client) = config.mqtt.map(connect_mqtt) {
-        let client = client?;
-        Some(client)
-    } else {
-        None
-    };
+    let broker_client = config.mqtt.map(connect_mqtt).transpose()?;
 
     const ELGATO_VID: u16 = 0x0fd9;
     let pid = match config.device {
