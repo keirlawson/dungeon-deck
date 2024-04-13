@@ -15,6 +15,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::iter;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -75,10 +76,13 @@ struct Row {
 }
 
 impl Row {
-    fn list(self) -> Vec<Option<ButtonConfig>> {
-        vec![
+    fn list(self, limit: usize) -> Vec<Option<ButtonConfig>> {
+        [
             self.one, self.two, self.three, self.four, self.five, self.six, self.seven, self.eight,
         ]
+        .into_iter()
+        .take(limit)
+        .collect()
     }
 }
 
@@ -91,14 +95,42 @@ struct Buttons {
 }
 
 impl Buttons {
-    fn list(self) -> Vec<Option<ButtonConfig>> {
+    fn list(self, device: Device) -> Vec<Option<ButtonConfig>> {
         let it = [self.first, self.second, self.third, self.fourth].into_iter();
-        it.flatten().flat_map(|r| r.list()).collect()
+        let it = it.take(device.rows());
+        it.flat_map(|row| match row {
+            Some(r) => r.list(device.columns()),
+            None => iter::repeat(None).take(device.columns()).collect(),
+        })
+        .collect()
+    }
+}
+
+#[derive(Deserialize)]
+enum Device {
+    Mk2,
+    RevisedMini,
+}
+
+impl Device {
+    fn rows(&self) -> usize {
+        match self {
+            Device::Mk2 => 3,
+            Device::RevisedMini => 2,
+        }
+    }
+
+    fn columns(&self) -> usize {
+        match self {
+            Device::Mk2 => 5,
+            Device::RevisedMini => 3,
+        }
     }
 }
 
 #[derive(Deserialize)]
 struct Config {
+    device: Device,
     mqtt: Option<BrokerConfig>,
     buttons: Buttons,
     #[serde(default)]
@@ -191,13 +223,17 @@ fn main() -> Result<()> {
     };
 
     const ELGATO_VID: u16 = 0x0fd9;
-    let mut deck = StreamDeck::connect(ELGATO_VID, pids::REVISED_MINI, None)?;
+    let pid = match config.device {
+        Device::Mk2 => pids::MK2,
+        Device::RevisedMini => pids::REVISED_MINI,
+    };
+    let mut deck = StreamDeck::connect(ELGATO_VID, pid, None)?;
     info!("Connected to Stream Deck");
 
     let (width, height) = deck.kind().image_size();
     let play_img = image::load_from_memory(PLAY_IMG)?;
     let stop_img = image::load_from_memory(STOP_IMG)?;
-    let buttons = config.buttons.list();
+    let buttons = config.buttons.list(config.device);
     let mut button_state = build_state(buttons, width, height)?;
     write_images(&button_state, &mut deck, &play_img, config.playicon)?;
 
