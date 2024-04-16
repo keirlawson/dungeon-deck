@@ -8,14 +8,16 @@ license = "MIT"
 [dependencies]
 paho-mqtt = { version = "0.12.3", features = ["vendored-ssl"]}
 rodio = { version = "0.17.3", features = ["symphonia-all"] }
-streamdeck = "0.8.0"
+streamdeck = { git = "https://github.com/keirlawson/rust-streamdeck.git", branch = "upgrade-image" }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8.5"
 anyhow = "1.0.75"
 log = "0.4.20"
 env_logger = "0.10.0"
 ctrlc = { version = "3.4.1", features = ["termination"] }
-image = "0.24.7"
+image = "0.25.1"
+imageproc = "0.24.0"
+ab_glyph = "0.2.25"
 
 [profile.release]
 strip = "symbols"

@@ -1,3 +1,5 @@
+use ab_glyph::FontRef;
+use ab_glyph::PxScale;
 use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
@@ -6,6 +8,8 @@ use image::imageops;
 use image::imageops::FilterType;
 use image::io::Reader;
 use image::DynamicImage;
+use image::ImageBuffer;
+use image::Rgb;
 use log::debug;
 use log::error;
 use log::info;
@@ -28,6 +32,11 @@ const PLAY_IMG: &[u8] = include_bytes!("../img/play.png");
 const STOP_IMG: &[u8] = include_bytes!("../img/stop.png");
 const DEFAULT_CONFIG_LOCATION: &str = "./dungeon.toml";
 
+const FONT_DATA: &[u8] = include_bytes!("../unifont.otf");
+const BLACK: Rgb<u8> = Rgb([0, 0, 0]);
+const WHITE: Rgb<u8> = Rgb([255, 255, 255]);
+const DEFAULT_TEXT_HEIGHT: f32 = 15.0;
+
 struct Button {
     config: ButtonConfig,
     playing: bool,
@@ -38,6 +47,8 @@ impl Default for Button {
     fn default() -> Self {
         Button {
             config: ButtonConfig {
+                text: None,
+                text_size: None,
                 image: None,
                 sound: None,
                 topic: None,
@@ -57,7 +68,10 @@ struct BrokerConfig {
 }
 
 #[derive(Deserialize, Clone)]
+#[serde(rename_all = "kebab-case")]
 struct ButtonConfig {
+    text: Option<String>,
+    text_size: Option<f32>,
     image: Option<PathBuf>,
     sound: Option<PathBuf>,
     topic: Option<String>,
@@ -162,27 +176,24 @@ fn connect_mqtt(config: BrokerConfig) -> Result<Client> {
     Ok(client)
 }
 
-fn write_images(
+fn display_buttons(
     state: &HashMap<usize, Button>,
     deck: &mut StreamDeck,
     play_img: &DynamicImage,
     show_play_icon: bool,
 ) -> Result<()> {
     //FIXME still render initial play button when image not set
-    state
-        .iter()
-        .filter_map(|(i, but)| {
-            but.image
-                .as_ref()
-                .map(|img| (i, img, but.config.sound.is_some()))
-        })
-        .try_for_each(|(i, img, is_audio)| {
+    state.iter().try_for_each(|(index, button)| {
+        if let Some(img) = &button.image {
             let mut img = img.clone();
-            if is_audio && show_play_icon {
+            if button.config.sound.is_some() && show_play_icon {
                 imageops::overlay(&mut img, play_img, 0, 0);
             }
-            write_image(i, deck, img)
-        })
+            write_image(index, deck, img)?;
+        }
+
+        Ok(())
+    })
 }
 
 fn write_image(
@@ -221,6 +232,8 @@ fn main() -> Result<()> {
 
     let config: Config = toml::from_str(&config_contents)?;
 
+    let font = FontRef::try_from_slice(FONT_DATA)?;
+
     let broker_client = config.mqtt.map(connect_mqtt).transpose()?;
 
     const ELGATO_VID: u16 = 0x0fd9;
@@ -239,8 +252,8 @@ fn main() -> Result<()> {
     let play_img = image::load_from_memory(PLAY_IMG)?;
     let stop_img = image::load_from_memory(STOP_IMG)?;
     let buttons = config.buttons.list(config.device);
-    let mut button_state = build_state(buttons, width, height)?;
-    write_images(&button_state, &mut deck, &play_img, config.playicon)?;
+    let mut button_state = build_state(buttons, width, height, font)?;
+    display_buttons(&button_state, &mut deck, &play_img, config.playicon)?;
 
     let (_stream, stream_handle) = OutputStream::try_default()?;
     let sink = Sink::try_new(&stream_handle)?;
@@ -281,22 +294,13 @@ fn build_state(
     buttons: Vec<Option<ButtonConfig>>,
     width: usize,
     height: usize,
+    font: FontRef,
 ) -> Result<HashMap<usize, Button>> {
     buttons
         .into_iter()
         .map(move |conf| {
             let button = if let Some(conf) = conf {
-                let image = conf
-                    .image
-                    .as_ref()
-                    .map(|path| {
-                        let image = Reader::open(path)
-                            .with_context(|| format!("Unable to open path {}", path.display()))?
-                            .decode()?;
-                        let image = image.resize(width as u32, height as u32, FilterType::Gaussian);
-                        anyhow::Ok(image)
-                    })
-                    .transpose()?;
+                let image = prepare_image(&conf, width, height, &font)?;
 
                 Button {
                     config: conf,
@@ -311,6 +315,34 @@ fn build_state(
         .enumerate()
         .map(|(i, r)| r.map(|c| (i, c)))
         .collect::<Result<HashMap<usize, Button>>>()
+}
+
+fn prepare_image(
+    conf: &ButtonConfig,
+    width: usize,
+    height: usize,
+    font: &FontRef,
+) -> Result<Option<DynamicImage>, anyhow::Error> {
+    if let Some(text) = &conf.text {
+        let mut image = ImageBuffer::from_pixel(width as u32, height as u32, BLACK);
+        let line_height = 1.1;
+        let size = conf.text_size.unwrap_or(DEFAULT_TEXT_HEIGHT);
+        let scale = PxScale { x: size, y: size };
+        let mut y = 0;
+        text.to_string().split('\n').for_each(|txt| {
+            imageproc::drawing::draw_text_mut(&mut image, WHITE, 0, y, scale, &font, txt);
+            y += (scale.y * line_height).round() as i32;
+        });
+        Ok(Some(DynamicImage::ImageRgb8(image)))
+    } else if let Some(path) = &conf.image {
+        let image = Reader::open(path)
+            .with_context(|| format!("Unable to open path {}", path.display()))?
+            .decode()?;
+        let image = image.resize(width as u32, height as u32, FilterType::Gaussian);
+        Ok(Some(image))
+    } else {
+        Ok(None)
+    }
 }
 
 fn pressed_idx(states: &[u8]) -> Option<usize> {
