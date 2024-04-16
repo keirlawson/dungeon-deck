@@ -35,6 +35,7 @@ const DEFAULT_CONFIG_LOCATION: &str = "./dungeon.toml";
 const FONT_DATA: &[u8] = include_bytes!("../unifont.otf");
 const BLACK: Rgb<u8> = Rgb([0, 0, 0]);
 const WHITE: Rgb<u8> = Rgb([255, 255, 255]);
+const DEFAULT_TEXT_HEIGHT: f32 = 15.0;
 
 struct Button {
     config: ButtonConfig,
@@ -146,8 +147,10 @@ impl Device {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
 struct Config {
     device: Device,
+    text_size: Option<f32>,
     mqtt: Option<BrokerConfig>,
     buttons: Buttons,
     #[serde(default)]
@@ -248,7 +251,7 @@ fn main() -> Result<()> {
     let play_img = image::load_from_memory(PLAY_IMG)?;
     let stop_img = image::load_from_memory(STOP_IMG)?;
     let buttons = config.buttons.list(config.device);
-    let mut button_state = build_state(buttons, width, height, font)?;
+    let mut button_state = build_state(buttons, width, height, font, config.text_size)?;
     display_buttons(&button_state, &mut deck, &play_img, config.playicon)?;
 
     let (_stream, stream_handle) = OutputStream::try_default()?;
@@ -291,12 +294,13 @@ fn build_state(
     width: usize,
     height: usize,
     font: FontRef,
+    text_size: Option<f32>,
 ) -> Result<HashMap<usize, Button>> {
     buttons
         .into_iter()
         .map(move |conf| {
             let button = if let Some(conf) = conf {
-                let image = prepare_image(&conf, width, height, &font)?;
+                let image = prepare_image(&conf, width, height, &font, text_size)?;
 
                 Button {
                     config: conf,
@@ -318,11 +322,14 @@ fn prepare_image(
     width: usize,
     height: usize,
     font: &FontRef,
+    size: Option<f32>,
 ) -> Result<Option<DynamicImage>, anyhow::Error> {
     if let Some(text) = &conf.text {
         let mut image = ImageBuffer::from_pixel(width as u32, height as u32, BLACK);
         let line_height = 1.1;
-        let scale = PxScale { x: 15.0, y: 15.0 };
+        let size = size.unwrap_or(DEFAULT_TEXT_HEIGHT);
+        println!("size {}", size);
+        let scale = PxScale { x: size, y: size };
         let mut y = 0;
         text.to_string().split('\n').for_each(|txt| {
             imageproc::drawing::draw_text_mut(&mut image, WHITE, 0, y, scale, &font, txt);
