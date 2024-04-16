@@ -50,6 +50,7 @@ pass = "somepassword"
 [buttons.top.left]
 image = "./swords.png"
 sound = "./epicbattle.mp3"
+repeat = true
 
 [buttons.bottom.right]
 text-size = 10.0

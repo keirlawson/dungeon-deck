@@ -15,6 +15,7 @@ use log::error;
 use log::info;
 use mqtt::Client;
 use paho_mqtt as mqtt;
+use rodio::Source;
 use rodio::{Decoder, OutputStream, Sink};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -51,6 +52,7 @@ impl Default for Button {
                 text_size: None,
                 image: None,
                 sound: None,
+                repeat: false,
                 topic: None,
                 payload: None,
             },
@@ -74,6 +76,8 @@ struct ButtonConfig {
     text_size: Option<f32>,
     image: Option<PathBuf>,
     sound: Option<PathBuf>,
+    #[serde(default)]
+    repeat: bool,
     topic: Option<String>,
     payload: Option<String>,
 }
@@ -384,7 +388,11 @@ fn handle_press(
             let source = Decoder::new(file)?;
             sink.stop();
             debug!("Playing audio file {:?}", path);
-            sink.append(source);
+            if button.config.repeat {
+                sink.append(source.repeat_infinite());
+            } else {
+                sink.append(source);
+            }
             button.playing = true;
             if let Some(img) = &button.image {
                 write_overlayed(idx, img, stop_img, deck)?;
