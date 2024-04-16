@@ -52,7 +52,8 @@ image = "./swords.png"
 sound = "./epicbattle.mp3"
 
 [buttons.bottom.right]
-image = "./lightbulb.png"
+text-size = 10.0
+text = "press me"
 topic = "some/topic"
 payload = "pressed"
 ```
