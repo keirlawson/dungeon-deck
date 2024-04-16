@@ -48,6 +48,7 @@ impl Default for Button {
         Button {
             config: ButtonConfig {
                 text: None,
+                text_size: None,
                 image: None,
                 sound: None,
                 topic: None,
@@ -67,8 +68,10 @@ struct BrokerConfig {
 }
 
 #[derive(Deserialize, Clone)]
+#[serde(rename_all = "kebab-case")]
 struct ButtonConfig {
     text: Option<String>,
+    text_size: Option<f32>,
     image: Option<PathBuf>,
     sound: Option<PathBuf>,
     topic: Option<String>,
@@ -147,10 +150,8 @@ impl Device {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
 struct Config {
     device: Device,
-    text_size: Option<f32>,
     mqtt: Option<BrokerConfig>,
     buttons: Buttons,
     #[serde(default)]
@@ -251,7 +252,7 @@ fn main() -> Result<()> {
     let play_img = image::load_from_memory(PLAY_IMG)?;
     let stop_img = image::load_from_memory(STOP_IMG)?;
     let buttons = config.buttons.list(config.device);
-    let mut button_state = build_state(buttons, width, height, font, config.text_size)?;
+    let mut button_state = build_state(buttons, width, height, font)?;
     display_buttons(&button_state, &mut deck, &play_img, config.playicon)?;
 
     let (_stream, stream_handle) = OutputStream::try_default()?;
@@ -294,13 +295,12 @@ fn build_state(
     width: usize,
     height: usize,
     font: FontRef,
-    text_size: Option<f32>,
 ) -> Result<HashMap<usize, Button>> {
     buttons
         .into_iter()
         .map(move |conf| {
             let button = if let Some(conf) = conf {
-                let image = prepare_image(&conf, width, height, &font, text_size)?;
+                let image = prepare_image(&conf, width, height, &font)?;
 
                 Button {
                     config: conf,
@@ -322,13 +322,11 @@ fn prepare_image(
     width: usize,
     height: usize,
     font: &FontRef,
-    size: Option<f32>,
 ) -> Result<Option<DynamicImage>, anyhow::Error> {
     if let Some(text) = &conf.text {
         let mut image = ImageBuffer::from_pixel(width as u32, height as u32, BLACK);
         let line_height = 1.1;
-        let size = size.unwrap_or(DEFAULT_TEXT_HEIGHT);
-        println!("size {}", size);
+        let size = conf.text_size.unwrap_or(DEFAULT_TEXT_HEIGHT);
         let scale = PxScale { x: size, y: size };
         let mut y = 0;
         text.to_string().split('\n').for_each(|txt| {
