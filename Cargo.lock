@@ -1802,8 +1802,9 @@ dependencies = [
 
 [[package]]
 name = "streamdeck"
-version = "0.7.0"
-source = "git+https://github.com/keirlawson/rust-streamdeck.git?branch=upgrade-image#9fd098bc4e578c43f3adead5a3184c3fd24be07a"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67325ca3ab85003cac6eb10395aa8c7506b4c273ff48513604e658b85f77ea72"
 dependencies = [
  "ab_glyph",
  "hidapi",
