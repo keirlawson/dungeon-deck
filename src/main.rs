@@ -37,6 +37,7 @@ const FONT_DATA: &[u8] = include_bytes!("../unifont.otf");
 const BLACK: Rgb<u8> = Rgb([0, 0, 0]);
 const WHITE: Rgb<u8> = Rgb([255, 255, 255]);
 const DEFAULT_TEXT_HEIGHT: f32 = 15.0;
+const DEFAULT_BRIGHTNESS: u8 = 100;
 
 struct Button {
     config: ButtonConfig,
@@ -156,6 +157,7 @@ impl Device {
 #[derive(Deserialize)]
 struct Config {
     device: Device,
+    brightness: Option<u8>,
     mqtt: Option<BrokerConfig>,
     buttons: Buttons,
     #[serde(default)]
@@ -257,6 +259,8 @@ fn main() -> Result<()> {
     let stop_img = image::load_from_memory(STOP_IMG)?;
     let buttons = config.buttons.list(config.device);
     let mut button_state = build_state(buttons, width, height, font)?;
+    let brightness = config.brightness.unwrap_or(DEFAULT_BRIGHTNESS);
+    deck.set_brightness(brightness)?;
     display_buttons(&button_state, &mut deck, &play_img, config.playicon)?;
 
     let (_stream, stream_handle) = OutputStream::try_default()?;
