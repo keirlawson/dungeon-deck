@@ -18,6 +18,7 @@ ctrlc = { version = "3.4.1", features = ["termination"] }
 image = "0.25.1"
 imageproc = "0.24.0"
 ab_glyph = "0.2.25"
+m3u = "1.0.0"
 
 [profile.release]
 strip = "symbols"

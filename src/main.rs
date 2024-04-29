@@ -1,5 +1,6 @@
 use ab_glyph::FontRef;
 use ab_glyph::PxScale;
+use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
@@ -15,6 +16,7 @@ use log::error;
 use log::info;
 use mqtt::Client;
 use paho_mqtt as mqtt;
+use rodio::source;
 use rodio::Source;
 use rodio::{Decoder, OutputStream, Sink};
 use serde::Deserialize;
@@ -43,6 +45,7 @@ struct Button {
     config: ButtonConfig,
     playing: bool,
     image: Option<DynamicImage>,
+    playlist_contents: Option<Vec<PathBuf>>,
 }
 
 impl Default for Button {
@@ -56,9 +59,11 @@ impl Default for Button {
                 repeat: false,
                 topic: None,
                 payload: None,
+                playlist: None,
             },
             playing: false,
             image: None,
+            playlist_contents: None,
         }
     }
 }
@@ -81,6 +86,7 @@ struct ButtonConfig {
     repeat: bool,
     topic: Option<String>,
     payload: Option<String>,
+    playlist: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -298,6 +304,20 @@ fn main() -> Result<()> {
     }
 }
 
+fn load_playlist(playlist: PathBuf) -> Result<Vec<PathBuf>> {
+    let mut reader = m3u::Reader::open(&playlist).unwrap();
+    let contents: Vec<_> = reader.entries().map(|entry| entry.unwrap()).collect();
+    contents
+        .into_iter()
+        .map(|e| match e {
+            m3u::Entry::Path(p) => playlist.parent().map(|a| a.join(p)).ok_or(anyhow!(
+                "Playlist has no parent directory for files to be relative to"
+            )),
+            m3u::Entry::Url(_) => Err(anyhow!("Urls not supported in playlists")),
+        })
+        .collect()
+}
+
 fn build_state(
     buttons: Vec<Option<ButtonConfig>>,
     width: usize,
@@ -309,11 +329,14 @@ fn build_state(
         .map(move |conf| {
             let button = if let Some(conf) = conf {
                 let image = prepare_image(&conf, width, height, &font)?;
+                let playlist_contents = conf.playlist.clone().map(load_playlist).transpose()?;
+                println!("{:?}", playlist_contents);
 
                 Button {
                     config: conf,
                     playing: false,
                     image,
+                    playlist_contents,
                 }
             } else {
                 Button::default()
@@ -387,22 +410,26 @@ fn handle_press(
             } else {
                 write_image(&idx, deck, play_img.clone())?;
             }
-        } else if let Some(path) = &button.config.sound {
-            let file = BufReader::new(File::open(path)?);
-            let source = Decoder::new(file)?;
+        } else if let Some(playlist) = &button.playlist_contents {
+            let files: Result<Vec<_>> = playlist.iter().map(decode_file).collect();
+            let all = source::from_iter(files?);
             sink.stop();
+            if button.config.repeat {
+                sink.append(all.repeat_infinite());
+            } else {
+                sink.append(all);
+            }
+            set_playing(button, idx, stop_img, deck)?;
+        } else if let Some(path) = &button.config.sound {
+            let source = decode_file(path)?;
             debug!("Playing audio file {:?}", path);
+            sink.stop();
             if button.config.repeat {
                 sink.append(source.repeat_infinite());
             } else {
                 sink.append(source);
             }
-            button.playing = true;
-            if let Some(img) = &button.image {
-                write_overlayed(idx, img, stop_img, deck)?;
-            } else {
-                write_image(&idx, deck, stop_img.clone())?;
-            }
+            set_playing(button, idx, stop_img, deck)?;
         }
 
         if let (Some(mqtt), Some(topic), Some(payload)) =
@@ -424,4 +451,25 @@ fn handle_press(
         debug!("Buttons released");
     }
     Ok(())
+}
+
+fn set_playing(
+    button: &mut Button,
+    idx: usize,
+    stop_img: &DynamicImage,
+    deck: &mut StreamDeck,
+) -> Result<()> {
+    button.playing = true;
+    if let Some(img) = &button.image {
+        write_overlayed(idx, img, stop_img, deck)?;
+    } else {
+        write_image(&idx, deck, stop_img.clone())?;
+    }
+    Ok(())
+}
+
+fn decode_file(path: &PathBuf) -> Result<Decoder<BufReader<File>>> {
+    let file = BufReader::new(File::open(path)?);
+    let source = Decoder::new(file)?;
+    Ok(source)
 }
