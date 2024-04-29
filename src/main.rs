@@ -213,7 +213,7 @@ fn write_image(
     deck: &mut StreamDeck,
     img: DynamicImage,
 ) -> std::result::Result<(), anyhow::Error> {
-    let button_idx = (idx + 1) as u8;
+    let button_idx = *idx as u8;
     debug!("Writing image to button {}", button_idx);
     deck.set_button_image(button_idx, img).map_err(|e| e.into())
 }
