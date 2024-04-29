@@ -47,12 +47,15 @@ pass = "somepassword"
 
 [buttons]
 
-[buttons.top.left]
+[buttons.first.one]
 image = "./swords.png"
 sound = "./epicbattle.mp3"
 repeat = true
 
-[buttons.bottom.right]
+[buttons.second.three]
+playlist = "./songs.m3u"
+
+[buttons.third.five]
 text-size = 10.0
 text = "press me"
 topic = "some/topic"
