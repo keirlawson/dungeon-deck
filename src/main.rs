@@ -330,7 +330,6 @@ fn build_state(
             let button = if let Some(conf) = conf {
                 let image = prepare_image(&conf, width, height, &font)?;
                 let playlist_contents = conf.playlist.clone().map(load_playlist).transpose()?;
-                println!("{:?}", playlist_contents);
 
                 Button {
                     config: conf,
