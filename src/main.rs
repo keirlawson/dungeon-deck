@@ -14,6 +14,7 @@ use image::Rgb;
 use log::debug;
 use log::error;
 use log::info;
+use log::warn;
 use mqtt::Client;
 use paho_mqtt as mqtt;
 use rodio::source;
@@ -286,7 +287,8 @@ fn main() -> Result<()> {
                 &stop_img,
                 &mut deck,
                 config.playicon,
-            )?,
+            )
+            .unwrap_or_else(|e| warn!("Error handling button press: {}", e)),
             Err(err) => {
                 if !matches!(err, Error::NoData) {
                     bail!(err)
