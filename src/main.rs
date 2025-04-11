@@ -307,8 +307,18 @@ fn main() -> Result<()> {
 }
 
 fn load_playlist(playlist: PathBuf) -> Result<Vec<PathBuf>> {
-    let mut reader = m3u::Reader::open(&playlist).unwrap();
-    let contents: Vec<_> = reader.entries().map(|entry| entry.unwrap()).collect();
+    let mut reader = m3u::Reader::open(&playlist)
+        .with_context(|| format!("Unable to open playlist file at {}", playlist.display()))?;
+    let contents: Result<Vec<_>> = reader
+        .entries()
+        .map(|entry| entry.map_err(|e| e.into()))
+        .collect();
+    let contents = contents.with_context(|| {
+        format!(
+            "Unable to read entries from playlist, is {} definetley a m3u file?",
+            playlist.display()
+        )
+    })?;
     contents
         .into_iter()
         .map(|e| match e {
@@ -361,7 +371,7 @@ fn prepare_image(
         let size = conf.text_size.unwrap_or(DEFAULT_TEXT_HEIGHT);
         let scale = PxScale { x: size, y: size };
         let mut y = 0;
-        text.to_string().split('\n').for_each(|txt| {
+        text.split('\n').for_each(|txt| {
             imageproc::drawing::draw_text_mut(&mut image, WHITE, 0, y, scale, &font, txt);
             y += (scale.y * line_height).round() as i32;
         });
