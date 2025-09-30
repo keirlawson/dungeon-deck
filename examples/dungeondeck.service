@@ -1,7 +1,6 @@
 [Unit]
 Description=Run Dungeon Deck
-Requires=btconnect.service
-After=btconnect.service
+Wants=btconnect.service
 
 [Service]
 ExecStart=/usr/local/bin/dungeon-deck /path/to/dungeon.toml
