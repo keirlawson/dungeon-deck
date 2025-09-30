@@ -18,13 +18,13 @@ use log::warn;
 use mqtt::Client;
 use paho_mqtt as mqtt;
 use rodio::source;
+use rodio::OutputStreamBuilder;
 use rodio::Source;
-use rodio::{Decoder, OutputStream, Sink};
+use rodio::{Decoder, Sink};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::iter;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -127,7 +127,7 @@ impl Buttons {
         let it = it.take(device.rows());
         it.flat_map(|row| match row {
             Some(r) => r.list(device.columns()),
-            None => iter::repeat(None).take(device.columns()).collect(),
+            None => std::iter::repeat_n(None, device.columns()).collect(),
         })
         .collect()
     }
@@ -270,8 +270,8 @@ fn main() -> Result<()> {
     deck.set_brightness(brightness)?;
     display_buttons(&button_state, &mut deck, &play_img, config.playicon)?;
 
-    let (_stream, stream_handle) = OutputStream::try_default()?;
-    let sink = Sink::try_new(&stream_handle)?;
+    let stream = OutputStreamBuilder::open_default_stream()?;
+    let sink = Sink::connect_new(stream.mixer());
     info!("Acquired audio sink");
 
     const POLL_WAIT: Duration = Duration::from_millis(250);
