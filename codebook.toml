@@ -1,0 +1,10 @@
+words = [
+    "automations",
+    "btconnect",
+    "dungeondeck",
+    "loginctl",
+    "mqtt",
+    "pipewire",
+    "systemctl",
+    "wireplumber",
+]

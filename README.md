@@ -14,13 +14,16 @@ dungeon-deck
 
 In order to run this application headless on the likes of a
 [Pi Zero 2 W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/)
-SystemD can be utilised. First in order to ensure that the PuseAudio service is
+SystemD can be utilised. First in order to ensure that the Pipewire service is
 running even without a user logging in we need to enable "lingering" for that
 user, which should cause associated SystemD services to start running at boot:
 
 ```sh
 loginctl enable-linger $USER
 ```
+
+Additionally Wireplumber's seat monitoring needs to be disabled
+[per these instructions](https://pipewire.pages.freedesktop.org/wireplumber/daemon/configuration/bluetooth.html#logind-integration).
 
 We can then use our own service to control starting up, example of this
 approach, along with a service to connect to a bluetooth speaker on boot can be

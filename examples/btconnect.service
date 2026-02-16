@@ -1,7 +1,7 @@
 [Unit]
 Description=Connect to bluetooth speaker
-Requires=pulseaudio.service
-After=pulseaudio.service
+Requires=wireplumber.service
+After=wireplumber.service
 
 [Service]
 ExecStart=/usr/bin/bluetoothctl connect <speaker MAC here>
