@@ -7,9 +7,9 @@ use anyhow::Result;
 use env_logger::Env;
 use image::imageops;
 use image::imageops::FilterType;
-use image::io::Reader;
 use image::DynamicImage;
 use image::ImageBuffer;
+use image::ImageReader;
 use image::Rgb;
 use log::debug;
 use log::error;
@@ -18,9 +18,10 @@ use log::warn;
 use mqtt::Client;
 use paho_mqtt as mqtt;
 use rodio::source;
-use rodio::OutputStreamBuilder;
+use rodio::Decoder;
+use rodio::DeviceSinkBuilder;
+use rodio::Player;
 use rodio::Source;
-use rodio::{Decoder, Sink};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
@@ -270,8 +271,8 @@ fn main() -> Result<()> {
     deck.set_brightness(brightness)?;
     display_buttons(&button_state, &mut deck, &play_img, config.playicon)?;
 
-    let stream = OutputStreamBuilder::open_default_stream()?;
-    let sink = Sink::connect_new(stream.mixer());
+    let stream = DeviceSinkBuilder::open_default_sink()?;
+    let sink = Player::connect_new(stream.mixer());
     info!("Acquired audio sink");
 
     const POLL_WAIT: Duration = Duration::from_millis(250);
@@ -315,7 +316,7 @@ fn load_playlist(playlist: PathBuf) -> Result<Vec<PathBuf>> {
         .collect();
     let contents = contents.with_context(|| {
         format!(
-            "Unable to read entries from playlist, is {} definetley a m3u file?",
+            "Unable to read entries from playlist, is {} definitely a m3u file?",
             playlist.display()
         )
     })?;
@@ -377,7 +378,7 @@ fn prepare_image(
         });
         Ok(Some(DynamicImage::ImageRgb8(image)))
     } else if let Some(path) = &conf.image {
-        let image = Reader::open(path)
+        let image = ImageReader::open(path)
             .with_context(|| format!("Unable to open path {}", path.display()))?
             .decode()?;
         let image = image.resize(width as u32, height as u32, FilterType::Gaussian);
@@ -397,7 +398,7 @@ fn pressed_idx(states: &[u8]) -> Option<usize> {
 
 #[allow(clippy::too_many_arguments)]
 fn handle_press(
-    sink: &Sink,
+    player: &Player,
     buttons: &mut HashMap<usize, Button>,
     pressed: &[u8],
     mqtt: &Option<Client>,
@@ -410,7 +411,7 @@ fn handle_press(
         debug!("Button {} pressed", idx);
         let button = buttons.get_mut(&idx).unwrap();
         if button.playing {
-            sink.stop();
+            player.stop();
             button.playing = false;
             if let Some(img) = &button.image {
                 if show_play_icon {
@@ -424,21 +425,21 @@ fn handle_press(
         } else if let Some(playlist) = &button.playlist_contents {
             let files: Result<Vec<_>> = playlist.iter().map(decode_file).collect();
             let all = source::from_iter(files?);
-            sink.stop();
+            player.stop();
             if button.config.repeat {
-                sink.append(all.repeat_infinite());
+                player.append(all.repeat_infinite());
             } else {
-                sink.append(all);
+                player.append(all);
             }
             set_playing(button, idx, stop_img, deck)?;
         } else if let Some(path) = &button.config.sound {
             let source = decode_file(path)?;
             debug!("Playing audio file {:?}", path);
-            sink.stop();
+            player.stop();
             if button.config.repeat {
-                sink.append(source.repeat_infinite());
+                player.append(source.repeat_infinite());
             } else {
-                sink.append(source);
+                player.append(source);
             }
             set_playing(button, idx, stop_img, deck)?;
         }

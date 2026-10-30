@@ -2,12 +2,11 @@
 name = "dungeon-deck"
 version = "2.3.1"
 edition = "2021"
-authors = ["Keir Lawson"]
 license = "MIT"
 
 [dependencies]
-paho-mqtt = { version = "0.12.3", features = ["vendored-ssl"]}
-rodio = { version = "0.21.1", features = ["symphonia-all"] }
+paho-mqtt = { version = "0.14.0", features = ["vendored-ssl"]}
+rodio = { version = "0.22.2", features = ["symphonia-all", "symphonia-simd"] }
 streamdeck = { git = "https://github.com/keirlawson/rust-streamdeck.git", branch = "one-index-revised-mini" }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8.5"
@@ -19,7 +18,6 @@ image = "0.25.1"
 imageproc = "0.24.0"
 ab_glyph = "0.2.25"
 m3u = "1.0.0"
-symphonia = { version = "0.5.4", features = ["opt-simd"] }
 
 [profile.release]
 strip = "symbols"

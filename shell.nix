@@ -3,13 +3,13 @@ let
 in
   pkgs.mkShell {
     buildInputs = with pkgs; [
-        openssl
-        alsa-lib
-        libusb1
+      openssl
+      alsa-lib
+      libusb1
     ];
     nativeBuildInputs = with pkgs; [
-        cmake
-        pkg-config
-        cargo-cross
+      cmake
+      pkg-config
+      cargo-cross
     ];
   }
