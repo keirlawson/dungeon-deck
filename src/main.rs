@@ -1,38 +1,39 @@
 use ab_glyph::FontRef;
 use ab_glyph::PxScale;
-use anyhow::anyhow;
-use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
+use anyhow::anyhow;
+use anyhow::bail;
+use clap::Parser;
 use env_logger::Env;
-use image::imageops;
-use image::imageops::FilterType;
 use image::DynamicImage;
 use image::ImageBuffer;
 use image::ImageReader;
 use image::Rgb;
+use image::imageops;
+use image::imageops::FilterType;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
 use mqtt::Client;
 use paho_mqtt as mqtt;
-use rodio::source;
 use rodio::Decoder;
 use rodio::DeviceSinkBuilder;
 use rodio::Player;
 use rodio::Source;
+use rodio::source;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 use std::{fs::File, io::BufReader};
-use streamdeck::{pids, Error, StreamDeck};
+use streamdeck::{Error, StreamDeck, pids};
+
 const PLAY_IMG: &[u8] = include_bytes!("../img/play.png");
 const STOP_IMG: &[u8] = include_bytes!("../img/stop.png");
 const DEFAULT_CONFIG_LOCATION: &str = "./dungeon.toml";
@@ -231,14 +232,20 @@ fn write_overlayed(
     write_image(&idx, deck, img)
 }
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+    config: Option<String>,
+}
+
 fn main() -> Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let kill = Arc::new(AtomicBool::new(false));
     let k2 = kill.clone();
     ctrlc::set_handler(move || k2.store(true, Ordering::Relaxed)).unwrap();
 
-    let args: Vec<String> = env::args().collect();
-    let config_contents = if let Some(location) = args.get(1) {
+    let args = Args::parse();
+    let config_contents = if let Some(location) = args.config {
         fs::read_to_string(location)?
     } else {
         fs::read_to_string(DEFAULT_CONFIG_LOCATION)?

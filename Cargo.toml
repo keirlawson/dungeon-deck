@@ -18,6 +18,7 @@ image = "0.25.1"
 imageproc = "0.24.0"
 ab_glyph = "0.2.25"
 m3u = "1.0.0"
+clap = { version = "4.6.7", features = ["derive"] }
 
 [profile.release]
 strip = "symbols"
